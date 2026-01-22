@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FBI Intelligence Terminal v3.0</title>
+    <style>
+        /* --- GLOBALER LOOK --- */
+        body { font-family: 'Courier New', monospace; background-color: #0a0a0a; color: #e0e0e0; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        #sidebar { width: 260px; background-color: #0d1b2a; border-right: 2px solid #1b4965; padding: 20px; display: flex; flex-direction: column; flex-shrink: 0; }
+        #sidebar h2 { color: #62b6cb; text-align: center; border-bottom: 2px solid #1b4965; padding-bottom: 15px; letter-spacing: 3px; }
+        .menu-btn { background: none; border: 1px solid #1b4965; color: white; padding: 12px; margin-top: 10px; cursor: pointer; text-align: left; font-family: 'Courier New', monospace; transition: all 0.2s; text-transform: uppercase; }
+        .menu-btn:hover { background-color: #1b4965; box-shadow: 0 0 10px #62b6cb; }
+        #main-content { flex-grow: 1; padding: 40px; overflow-y: auto; background: radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%); position: relative; }
+
+        /* --- HEADER & NAVIGATION --- */
+        .section-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; margin-bottom: 20px; }
+        .action-btn { background-color: #1b4965; color: white; border: 1px solid #62b6cb; padding: 10px 20px; cursor: pointer; font-family: 'Courier New'; font-weight: bold; }
+        .action-btn:hover { background-color: #62b6cb; color: #0d1b2a; }
+
+        /* --- TABELLEN --- */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: rgba(255,255,255,0.02); }
+        th { text-align: left; background-color: #0d1b2a; color: #62b6cb; padding: 12px; border-bottom: 2px solid #1b4965; }
+        td { padding: 12px; border-bottom: 1px solid #333; cursor: pointer; }
+        tr:hover { background: rgba(98, 182, 203, 0.1); }
+
+        /* --- FORMULARE & CARDS --- */
+        .card { background-color: #161616; border: 1px solid #333; padding: 20px; border-left: 5px solid #62b6cb; margin-bottom: 20px; }
+        input, textarea, select { width: 100%; background: #000; color: #00ff00; border: 1px solid #444; padding: 12px; margin: 5px 0; box-sizing: border-box; font-family: 'Courier New'; outline: none; }
+        .tag { background: #1b4965; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; margin-right: 5px; color: #fff; }
+
+        /* --- SUCHFELD --- */
+        .search-box { border-color: #f1c40f !important; padding-left: 15px !important; margin-bottom: 20px; }
+
+        /* --- OVERLAY / MODAL --- */
+        #detail-view { display: none; position: fixed; top: 10%; left: 30%; width: 40%; background: #161616; border: 2px solid #62b6cb; padding: 30px; z-index: 100; box-shadow: 0 0 50px #000; }
+        .close-btn { color: red; float: right; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>FBI MDT</h2>
+        <button class="menu-btn" onclick="showSection('dashboard')">📊 Dashboard</button>
+        <button class="menu-btn" onclick="showSection('personen')">👤 Personenakten</button>
+        <button class="menu-btn" onclick="showSection('gangs')">☠️ Gang-Dossiers</button>
+        <button class="menu-btn" onclick="showSection('berichte')">📝 Berichte</button>
+    </div>
+
+    <div id="main-content">
+        
+        <div id="dashboard">
+            <h1>SYSTEM TERMINAL</h1>
+            <p>Status: <span style="color: #00ff00;">GESICHERT</span> | Zeit: <span id="clock"></span></p>
+        </div>
+
+        <div id="personen" style="display:none;">
+            <div class="section-header">
+                <h1>👤 PERSONEN-DATENBANK</h1>
+                <button class="action-btn" onclick="toggleForm('person-form')">+ NEUE AKTE ANLEGEN</button>
+            </div>
+
+            <div id="person-form" class="card" style="display:none; border-left-color: #e74c3c;">
+                <h3>NEU-REGISTRIERUNG</h3>
+                <input type="text" id="p_name" placeholder="Name">
+                <input type="text" id="p_phone" placeholder="Telefonnummer">
+                <input type="text" id="p_gang" placeholder="Zugehörige Gang">
+                <label>Status-Tag:</label>
+                <select id="p_tag">
+                    <option value="Unauffällig">Unauffällig</option>
+                    <option value="Gesucht">🔴 Gesucht</option>
+                    <option value="Bewaffnet">⚠️ Bewaffnet</option>
+                    <option value="Flüchtig">🏃 Flüchtiger Häftling</option>
+                    <option value="Kooperativ">🤝 Kooperativ</option>
+                </select>
+                <textarea id="p_notes" rows="3" placeholder="Zusätzliche Notizen/Straftaten..."></textarea>
+                <button class="save-btn" style="width:100%; height:40px; background:#1b4965; color:white;" onclick="saveData('personen')">IN DATENBANK SPEICHERN</button>
+            </div>
+
+            <input type="text" id="p_search" class="search-box" placeholder="Suche nach Name, Nummer oder Gang..." onkeyup="filter('personen')">
+            
+            <table id="person-table">
+                <thead>
+                    <tr>
+                        <th>NAME</th>
+                        <th>TELEFON</th>
+                        <th>GANG</th>
+                        <th>STATUS</th>
+                    </tr>
+                </thead>
+                <tbody id="person-list">
+                    </tbody>
+            </table>
+        </div>
+
+        <div id="gangs" style="display:none;">
+            <div class="section-header">
+                <h1>☠️ GANG-VERZEICHNIS</h1>
+                <button class="action-btn" onclick="toggleForm('gang-form')">+ NEUE GANG</button>
+            </div>
+            <div id="gang-form" class="card" style="display:none; border-left-color: #9b59b6;">
+                <input type="text" id="g_name" placeholder="Name der Gang">
+                <input type="text" id="g_leader" placeholder="Anführer">
+                <input type="text" id="g_area" placeholder="Territorium">
+                <textarea id="g_notes" rows="3" placeholder="Merkmale/Aktivitäten..."></textarea>
+                <button class="save-btn" style="width:100%; height:40px; background:#1b4965; color:white;" onclick="saveData('gangs')">GANG SPEICHERN</button>
+            </div>
+            <input type="text" id="g_search" class="search-box" placeholder="Suche Gang..." onkeyup="filter('gangs')">
+            <div id="gang-list"></div>
+        </div>
+
+        <div id="berichte" style="display:none;">
+            <div class="section-header">
+                <h1>📝 EINSATZBERICHTE</h1>
+                <button class="action-btn" onclick="toggleForm('report-form')">+ NEUER BERICHT</button>
+            </div>
+            <div id="report-form" class="card" style="display:none; border-left-color: #2ecc71;">
+                <input type="text" id="r_title" placeholder="Titel des Einsatzes">
+                <input type="text" id="r_agents" placeholder="Beteiligte Agenten">
+                <textarea id="r_text" rows="5" placeholder="Berichtstext..."></textarea>
+                <button class="save-btn" style="width:100%; height:40px; background:#1b4965; color:white;" onclick="saveData('berichte')">BERICHT ARCHIVIEREN</button>
+            </div>
+            <input type="text" id="r_search" class="search-box" placeholder="Suche Bericht..." onkeyup="filter('berichte')">
+            <div id="report-list"></div>
+        </div>
+
+        <div id="detail-view">
+            <span class="close-btn" onclick="document.getElementById('detail-view').style.display='none'">[X] SCHLIESSEN</span>
+            <h2 id="detail-name" style="color:#62b6cb"></h2>
+            <hr>
+            <p><strong>Telefon:</strong> <span id="detail-phone"></span></p>
+            <p><strong>Gang:</strong> <span id="detail-gang"></span></p>
+            <p><strong>Status:</strong> <span id="detail-tag"></span></p>
+            <p><strong>Einträge:</strong></p>
+            <div id="detail-notes" style="background:#000; padding:10px; border:1px solid #333; color:#00ff00;"></div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBd0zvtsEKLHUcMHbnHo2U2ptZsZiR9vyY",
+            authDomain: "fbi-mdt-server.firebaseapp.com",
+            projectId: "fbi-mdt-server",
+            storageBucket: "fbi-mdt-server.firebasestorage.app",
+            messagingSenderId: "786795001981",
+            appId: "1:786795001981:web:e50d5a83210347d9591914",
+            measurementId: "G-9DY5VHS823"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        let cache = { personen: [], gangs: [], berichte: [] };
+
+        // --- NAVIGATION & UI ---
+        window.showSection = (id) => {
+            ["dashboard", "personen", "gangs", "berichte"].forEach(s => document.getElementById(s).style.display = 'none');
+            document.getElementById(id).style.display = 'block';
+        };
+
+        window.toggleForm = (id) => {
+            const f = document.getElementById(id);
+            f.style.display = f.style.display === 'none' ? 'block' : 'none';
+        };
+
+        // --- SPEICHERN ---
+        window.saveData = async (type) => {
+            let data = { timestamp: new Date() };
+            
+            if(type==='personen') {
+                data.name = document.getElementById('p_name').value;
+                data.phone = document.getElementById('p_phone').value;
+                data.gang = document.getElementById('p_gang').value;
+                data.tag = document.getElementById('p_tag').value;
+                data.notes = document.getElementById('p_notes').value;
+            } 
+            else if(type==='gangs') {
+                data.name = document.getElementById('g_name').value;
+                data.leader = document.getElementById('g_leader').value;
+                data.area = document.getElementById('g_area').value;
+                data.notes = document.getElementById('g_notes').value;
+            } 
+            else if(type==='berichte') {
+                data.title = document.getElementById('r_title').value;
+                data.agents = document.getElementById('r_agents').value;
+                data.text = document.getElementById('r_text').value;
+            }
+
+            try {
+                await addDoc(collection(db, type), data);
+                alert("SYSTEM: DATENSATZ IN " + type.toUpperCase() + " GESPEICHERT");
+                
+                // Formular schließen
+                if(type === 'personen') document.getElementById('person-form').style.display = 'none';
+                if(type === 'gangs') document.getElementById('gang-form').style.display = 'none';
+                if(type === 'berichte') document.getElementById('report-form').style.display = 'none';
+                
+                // Alle Felder leeren
+                document.querySelectorAll('input, textarea').forEach(el => el.value = "");
+            } catch (e) { 
+                console.error(e); 
+                alert("FEHLER BEIM SPEICHERN!"); 
+            }
+        };
+
+        // --- LISTENER & RENDERING ---
+        function setup(type, listId) {
+            const q = query(collection(db, type), orderBy("timestamp", "desc"));
+            onSnapshot(q, (snaps) => {
+                cache[type] = [];
+                snaps.forEach(doc => cache[type].push({id: doc.id, ...doc.data()}));
+                render(type, listId, cache[type]);
+            });
+        }
+
+        function render(type, listId, data) {
+            const container = document.getElementById(listId);
+            if (!container) return;
+            container.innerHTML = "";
+
+            data.forEach(item => {
+                if(type === 'personen') {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${item.name}</td><td>${item.phone || '---'}</td><td>${item.gang || 'Zivilist'}</td><td><span class="tag">${item.tag}</span></td>`;
+                    tr.onclick = () => showDetail(item);
+                    container.appendChild(tr);
+                } else if(type === 'gangs') {
+                    container.innerHTML += `
+                        <div class="card" style="border-left-color: #9b59b6;">
+                            <h4>${item.name}</h4>
+                            <p><strong>Leader:</strong> ${item.leader || 'Unbekannt'} | <strong>Gebiet:</strong> ${item.area || 'Unbekannt'}</p>
+                            <p>${item.notes || ''}</p>
+                        </div>`;
+                } else if(type === 'berichte') {
+                    container.innerHTML += `
+                        <div class="card" style="border-left-color: #2ecc71;">
+                            <h4>${item.title}</h4>
+                            <p><strong>Agenten:</strong> ${item.agents || 'Unbekannt'}</p>
+                            <p>${item.text || ''}</p>
+                        </div>`;
+                }
+            });
+        }
+
+        window.showDetail = (item) => {
+            document.getElementById('detail-name').innerText = item.name;
+            document.getElementById('detail-phone').innerText = item.phone || '---';
+            document.getElementById('detail-gang').innerText = item.gang || 'Zivilist';
+            document.getElementById('detail-tag').innerText = item.tag;
+            document.getElementById('detail-notes').innerText = item.notes;
+            document.getElementById('detail-view').style.display = 'block';
+        };
+
+        // --- REPARIERTE SUCHE ---
+        window.filter = (type) => {
+            const searchTerm = document.getElementById(type[0] + '_search').value.toLowerCase();
+            
+            const filtered = cache[type].filter(i => {
+                if(type === 'personen') {
+                    return (i.name?.toLowerCase().includes(searchTerm) || 
+                            i.phone?.toLowerCase().includes(searchTerm) || 
+                            i.gang?.toLowerCase().includes(searchTerm));
+                }
+                if(type === 'gangs') {
+                    return (i.name?.toLowerCase().includes(searchTerm) || 
+                            i.leader?.toLowerCase().includes(searchTerm) || 
+                            i.area?.toLowerCase().includes(searchTerm));
+                }
+                if(type === 'berichte') {
+                    return (i.title?.toLowerCase().includes(searchTerm) || 
+                            i.agents?.toLowerCase().includes(searchTerm) || 
+                            i.text?.toLowerCase().includes(searchTerm));
+                }
+            });
+
+            // WICHTIG: Hier werden die korrekten IDs der Listen-Container angesprochen
+            let targetListId = "";
+            if(type === 'personen') targetListId = 'person-list';
+            if(type === 'gangs') targetListId = 'gang-list';
+            if(type === 'berichte') targetListId = 'report-list';
+
+            render(type, targetListId, filtered);
+        };
+
+        setup('personen', 'person-list');
+        setup('gangs', 'gang-list');
+        setup('berichte', 'report-list');
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('de-DE'); }, 1000);
+    </script>
+</body>
+</html>
