@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FBI Intelligence Terminal v3.0</title>
+    <title>FBI Intelligence Terminal v3.1</title>
     <style>
         /* --- GLOBALER LOOK --- */
         body { font-family: 'Courier New', monospace; background-color: #0a0a0a; color: #e0e0e0; margin: 0; display: flex; height: 100vh; overflow: hidden; }
@@ -39,6 +39,18 @@
 </head>
 <body>
 
+    <div id="login-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#0a0a0a; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+    <h1 style="color:#62b6cb; letter-spacing:5px;">FBI - ACCESS RESTRICTED</h1>
+    <div class="card" style="width:300px; border-left-color:#e74c3c;">
+        <input type="text" id="user-name" placeholder="Benutzername">
+        <input type="password" id="user-pw" placeholder="Passwort">
+        <button class="action-btn" style="width:100%;" onclick="attemptLogin()">LOGIN</button>
+    </div>
+</div>
+
+<button class="menu-btn" id="btn-personal" style="display:none;" onclick="showSection('personal')">🎖️ Personal</button>
+<button class="menu-btn" id="btn-logs" style="display:none;" onclick="showSection('logs')">📁 System-Logs</button>
+
     <div id="sidebar">
         <h2>FBI MDT</h2>
         <button class="menu-btn" onclick="showSection('dashboard')">📊 Dashboard</button>
@@ -48,6 +60,27 @@
     </div>
 
     <div id="main-content">
+
+        <div id="personal" style="display:none;">
+    <h1>🎖️ PERSONALVERWALTUNG</h1>
+    <div class="card" style="border-left-color:#f1c40f;">
+        <h3>NEUEN AGENTEN EINTRAGEN</h3>
+        <input type="text" id="staff_name" placeholder="Name des Agents">
+        <input type="text" id="staff_rank" placeholder="Rang">
+        <button class="save-btn" onclick="saveData('personal')">Speichern</button>
+    </div>
+    <div id="personal-list"></div>
+</div>
+
+<div id="logs" style="display:none;">
+    <h1>📁 SYSTEM-LOGS (ADMIN ONLY)</h1>
+    <table style="font-size: 0.8em;">
+        <thead>
+            <tr><th>ZEIT</th><th>BENUTZER</th><th>AKTION</th></tr>
+        </thead>
+        <tbody id="logs-list"></tbody>
+    </table>
+</div>
         
         <div id="dashboard">
             <h1>SYSTEM TERMINAL</h1>
@@ -154,7 +187,55 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         let cache = { personen: [], gangs: [], berichte: [] };
+// --- 1. KONFIGURATION DER PASSWÖRTER ---
+const PASSWORDS = {
+    standard: "fbi123",    // Ändere dies in dein Wunsch-Passwort
+    personal: "staff456",  // Passwort für die Personalverwaltung
+    admin: "boss999"       // Passwort für alles inklusive Logs
+};
 
+let currentUser = ""; // Hier wird der Name des angemeldeten Agenten gespeichert
+
+// --- 2. DIE LOGIN-FUNKTION ---
+// Wir hängen die Funktion an "window", damit der Button im HTML sie findet
+window.attemptLogin = async () => {
+    const user = document.getElementById('user-name').value;
+    const pw = document.getElementById('user-pw').value;
+
+    if(!user || !pw) return alert("BITTE NAME UND PASSWORT EINGEBEN!");
+
+    let role = "";
+    if(pw === PASSWORDS.admin) role = "ADMIN";
+    else if(pw === PASSWORDS.personal) role = "STAFF";
+    else if(pw === PASSWORDS.standard) role = "USER";
+
+    if(role !== "") {
+        currentUser = user; // Speichert, wer gerade arbeitet
+        document.getElementById('login-overlay').style.display = 'none'; // Versteckt Login
+        
+        // Buttons je nach Rolle einblenden
+        if(role === "STAFF" || role === "ADMIN") document.getElementById('btn-personal').style.display = 'block';
+        if(role === "ADMIN") document.getElementById('btn-logs').style.display = 'block';
+        
+        // Den Login im System protokollieren
+        await logAction("LOGIN", `Agent hat sich als ${role} angemeldet.`);
+        alert(`Zugriff gewährt. Willkommen im Dienst, Agent ${user}.`);
+    } else {
+        alert("ZUGRIFF VERWEIGERT: Passwort ungültig.");
+    }
+};
+
+// --- 3. DIE LOG-FUNKTION (Schreibt in die Datenbank) ---
+async function logAction(action, details) {
+    try {
+        await addDoc(collection(db, "logs"), {
+            t: new Date(),        // Zeitstempel
+            u: currentUser,       // Benutzer
+            a: action,            // Was wurde getan? (Login, Speichern, etc.)
+            d: details            // Details dazu
+        });
+    } catch(e) { console.error("Log-Fehler:", e); }
+}
         // --- NAVIGATION & UI ---
         window.showSection = (id) => {
             ["dashboard", "personen", "gangs", "berichte"].forEach(s => document.getElementById(s).style.display = 'none');
@@ -168,6 +249,8 @@
 
         // --- SPEICHERN ---
         window.saveData = async (type) => {
+            await logAction("EINTRAG", "Daten in Bereich " + type + " erstellt.")
+
             let data = { timestamp: new Date() };
             
             if(type==='personen') {
