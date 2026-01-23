@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FBI Intelligence Terminal v3.1</title>
+    <title>FBI Intelligence Terminal v0.3</title>
     <style>
         /* --- GLOBALER LOOK --- */
         body { font-family: 'Courier New', monospace; background-color: #0a0a0a; color: #e0e0e0; margin: 0; display: flex; height: 100vh; overflow: hidden; }
@@ -62,23 +62,41 @@
     <div id="main-content">
 
         <div id="personal" style="display:none;">
-    <h1>🎖️ PERSONALVERWALTUNG</h1>
-    <div class="card" style="border-left-color:#f1c40f;">
-        <h3>NEUEN AGENTEN EINTRAGEN</h3>
-        <input type="text" id="staff_name" placeholder="Name des Agents">
-        <input type="text" id="staff_rank" placeholder="Rang">
-        <button class="save-btn" onclick="saveData('personal')">Speichern</button>
+    <div class="section-header">
+        <h1>🎖️ PERSONALVERWALTUNG</h1>
+        <button class="action-btn" onclick="toggleForm('staff-form')">+ NEUER AGENT</button>
     </div>
-    <div id="personal-list"></div>
+    
+    <div id="staff-form" class="card" style="display:none; border-left-color: #f1c40f;">
+        <input type="text" id="staff_name" placeholder="Agent Name">
+        <input type="text" id="staff_rank" placeholder="Dienstgrad (z.B. Senior Agent)">
+        <button class="action-btn" style="width:100%" onclick="saveData('personal')">AGENT SPEICHERN</button>
+    </div>
+
+    <table id="staff-table">
+        <thead>
+            <tr>
+                <th>NAME</th>
+                <th>DIENSTGRAD</th>
+            </tr>
+        </thead>
+        <tbody id="personal-list">
+            </tbody>
+    </table>
 </div>
 
 <div id="logs" style="display:none;">
     <h1>📁 SYSTEM-LOGS (ADMIN ONLY)</h1>
-    <table style="font-size: 0.8em;">
+    <table>
         <thead>
-            <tr><th>ZEIT</th><th>BENUTZER</th><th>AKTION</th></tr>
+            <tr>
+                <th>ZEITSTEMPEL</th>
+                <th>AGENT</th>
+                <th>AKTION</th>
+            </tr>
         </thead>
-        <tbody id="logs-list"></tbody>
+        <tbody id="logs-list">
+            </tbody>
     </table>
 </div>
         
@@ -194,53 +212,97 @@ const PASSWORDS = {
     admin: "boss999"       // Passwort für alles inklusive Logs
 };
 
-let currentUser = ""; // Hier wird der Name des angemeldeten Agenten gespeichert
-
-// --- 2. DIE LOGIN-FUNKTION ---
-// Wir hängen die Funktion an "window", damit der Button im HTML sie findet
-window.attemptLogin = async () => {
-    const user = document.getElementById('user-name').value;
-    const pw = document.getElementById('user-pw').value;
-
-    if(!user || !pw) return alert("BITTE NAME UND PASSWORT EINGEBEN!");
-
-    let role = "";
-    if(pw === PASSWORDS.admin) role = "ADMIN";
-    else if(pw === PASSWORDS.personal) role = "STAFF";
-    else if(pw === PASSWORDS.standard) role = "USER";
-
-    if(role !== "") {
-        currentUser = user; // Speichert, wer gerade arbeitet
-        document.getElementById('login-overlay').style.display = 'none'; // Versteckt Login
-        
-        // Buttons je nach Rolle einblenden
-        if(role === "STAFF" || role === "ADMIN") document.getElementById('btn-personal').style.display = 'block';
-        if(role === "ADMIN") document.getElementById('btn-logs').style.display = 'block';
-        
-        // Den Login im System protokollieren
-        await logAction("LOGIN", `Agent hat sich als ${role} angemeldet.`);
-        alert(`Zugriff gewährt. Willkommen im Dienst, Agent ${user}.`);
-    } else {
-        alert("ZUGRIFF VERWEIGERT: Passwort ungültig.");
-    }
+// --- 1. KONFIGURATION (WICHTIG: Hier müssen die Passwörter stehen!) ---
+const PW = { 
+    standard: "fbi123", 
+    personal: "staff456", 
+    admin: "boss999" 
 };
 
-// --- 3. DIE LOG-FUNKTION (Schreibt in die Datenbank) ---
-async function logAction(action, details) {
+let currentUser = ""; // Speichert den aktuellen Benutzer
+
+// --- 2. ROBUSTE LOG-FUNKTION (Bringt den Login nicht zum Absturz) ---
+async function logAction(aktion, details) {
     try {
-        await addDoc(collection(db, "logs"), {
-            t: new Date(),        // Zeitstempel
-            u: currentUser,       // Benutzer
-            a: action,            // Was wurde getan? (Login, Speichern, etc.)
-            d: details            // Details dazu
+        // Wir lassen das 'await' weg, damit der Code sofort weiterläuft
+        addDoc(collection(db, "logs"), {
+            timestamp: new Date(),
+            user: currentUser || "SYSTEM",
+            action: aktion,
+            details: details
         });
-    } catch(e) { console.error("Log-Fehler:", e); }
+    } catch(e) { 
+        console.warn("Log-Eintrag konnte nicht erstellt werden (Datenbank evtl. nicht erreichbar), Login läuft weiter."); 
+    }
 }
-        // --- NAVIGATION & UI ---
-        window.showSection = (id) => {
-            ["dashboard", "personen", "gangs", "berichte"].forEach(s => document.getElementById(s).style.display = 'none');
-            document.getElementById(id).style.display = 'block';
-        };
+
+// --- 3. SICHERER LOGIN (Der "Master"-Login) ---
+window.attemptLogin = async () => {
+    try {
+        // 1. Elemente suchen
+        const userField = document.getElementById('user-name');
+        const pwField = document.getElementById('user-pw');
+        
+        // Sicherheits-Check: Gibt es die Felder überhaupt?
+        if(!userField || !pwField) {
+            console.error("HTML-Fehler: Login-Felder (IDs 'user-name' oder 'user-pw') nicht gefunden!");
+            alert("Systemfehler: Login-Maske defekt.");
+            return;
+        }
+
+        const user = userField.value;
+        const pw = pwField.value;
+
+        // 2. Leere Eingabe prüfen
+        if(!user || !pw) return alert("BITTE NAME UND PASSWORT EINGEBEN!");
+
+        // 3. Rolle bestimmen
+        let role = "";
+        if(pw === PW.admin) role = "ADMIN";
+        else if(pw === PW.personal) role = "STAFF";
+        else if(pw === PW.standard) role = "USER";
+
+        // 4. Entscheidung treffen
+        if(role !== "") {
+            currentUser = user; 
+            
+            // Anzeige oben rechts aktualisieren (falls Element vorhanden)
+            const displayEl = document.getElementById('display-user');
+            if(displayEl) displayEl.innerText = `${user} [${role}]`;
+
+            // Login-Fenster ausblenden
+            document.getElementById('login-overlay').style.display = 'none';
+            
+            // Buttons je nach Rolle freischalten
+            if(role === "STAFF" || role === "ADMIN") {
+                const btnPersonal = document.getElementById('btn-personal');
+                if(btnPersonal) btnPersonal.style.display = 'block';
+            }
+            if(role === "ADMIN") {
+                const btnLogs = document.getElementById('btn-logs');
+                if(btnLogs) btnLogs.style.display = 'block';
+            }
+            
+            // Im Hintergrund loggen
+            logAction("LOGIN", `Erfolgreich als ${role}`);
+            
+        } else {
+            alert("ZUGRIFF VERWEIGERT: Passwort falsch.");
+            logAction("LOGIN-FEHLGESCHLAGEN", `Falsches PW von User: ${user}`);
+        }
+    } catch (err) {
+        console.error("Kritischer Login-Fehler:", err);
+        alert("Ein unerwarteter Fehler ist aufgetreten. Bitte Konsole prüfen.");
+    }
+};
+    window.showSection = (id) => {
+        // Zeigt nur den Bereich an, den du gerade angeklickt hast
+        document.querySelectorAll('#main-content > div').forEach(el => el.style.display = 'none');
+        const target = document.getElementById(id);
+        if (target) {
+            target.style.display = 'block';
+        }
+    };
 
         window.toggleForm = (id) => {
             const f = document.getElementById(id);
@@ -325,6 +387,22 @@ async function logAction(action, details) {
                             <p>${item.text || ''}</p>
                         </div>`;
                 }
+            else if(type === 'personal') {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.name}</td><td>${item.rank || 'Agent'}</td>`;
+                container.appendChild(tr);
+            } else if(type === 'logs') {
+                const tr = document.createElement('tr');
+                // Wir fangen Fehler ab, falls das Datum noch nicht geladen ist
+                const zeit = item.timestamp ? item.timestamp.toDate().toLocaleString('de-DE') : '...';
+                
+                tr.innerHTML = `
+                    <td style="color: #62b6cb; font-size: 0.8em;">${zeit}</td>
+                    <td style="color: #f1c40f;">${item.user || 'Unbekannt'}</td>
+                    <td><strong>${item.action || 'Aktion'}</strong>: ${item.details || ''}</td>
+                `;
+                container.appendChild(tr);
+            }
             });
         }
 
